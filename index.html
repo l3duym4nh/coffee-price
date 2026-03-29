@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coffee Price Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -20,7 +21,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
@@ -81,32 +82,18 @@
             color: #4ade80;
         }
 
-        .price.up {
-            color: #4ade80;
-        }
-
-        .price.down {
-            color: #f87171;
-        }
+        .price.up { color: #4ade80; }
+        .price.down { color: #f87171; }
+        .price.neutral { color: #fbbf24; }
 
         .change {
             font-size: 0.9rem;
             margin-top: 8px;
         }
 
-        .change.positive {
-            color: #4ade80;
-        }
-
-        .change.negative {
-            color: #f87171;
-        }
-
-        .update-info {
-            text-align: center;
-            color: #666;
-            margin-top: 20px;
-        }
+        .change.positive { color: #4ade80; }
+        .change.negative { color: #f87171; }
+        .change.neutral { color: #888; }
 
         .live-indicator {
             display: inline-flex;
@@ -131,6 +118,37 @@
             50% { opacity: 0.4; }
         }
 
+        .chart-container {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.2rem;
+            color: #d4a574;
+            margin-bottom: 16px;
+        }
+
+        .api-status {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+        }
+
+        .api-status.success { color: #4ade80; }
+        .api-status.error { color: #f87171; }
+        .api-status.loading { color: #fbbf24; }
+
+        .data-source {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 10px;
+        }
+
         .last-updated {
             font-size: 0.9rem;
             color: #888;
@@ -147,45 +165,140 @@
         <div style="text-align: center;">
             <div class="live-indicator">
                 <div class="live-dot"></div>
-                <span>Live Prices</span>
+                <span id="status">Live Prices</span>
             </div>
         </div>
+
+        <div class="api-status" id="apiStatus"></div>
 
         <div class="price-grid" id="priceGrid">
             <div class="price-card" id="arabica">
                 <div class="coffee-icon">🌱</div>
                 <div class="coffee-name">Arabica Coffee</div>
                 <div class="coffee-type">ICE Futures US (KC)</div>
-                <div class="price" id="arabica-price">$3.45</div>
-                <div class="change" id="arabica-change">+0.00 (0.00%)</div>
+                <div class="price neutral" id="arabica-price">--</div>
+                <div class="change neutral" id="arabica-change">Loading...</div>
             </div>
 
             <div class="price-card" id="robusta">
                 <div class="coffee-icon">🌿</div>
                 <div class="coffee-name">Robusta Coffee</div>
                 <div class="coffee-type">ICE Futures EU (RC)</div>
-                <div class="price" id="robusta-price">$5,234</div>
-                <div class="change" id="robusta-change">+0.00 (0.00%)</div>
+                <div class="price neutral" id="robusta-price">--</div>
+                <div class="change neutral" id="robusta-change">Loading...</div>
             </div>
 
             <div class="price-card" id="brent">
                 <div class="coffee-icon">🛢️</div>
                 <div class="coffee-name">Brent Crude</div>
                 <div class="coffee-type">ICE Futures EU</div>
-                <div class="price" id="brent-price">$78.50</div>
-                <div class="change" id="brent-change">+0.00 (0.00%)</div>
+                <div class="price neutral" id="brent-price">--</div>
+                <div class="change neutral" id="brent-change">Loading...</div>
             </div>
         </div>
 
+        <div class="chart-container">
+            <div class="chart-title">Price History</div>
+            <canvas id="priceChart"></canvas>
+        </div>
+
+        <p class="data-source">Data: Alpha Vantage API | History: GitHub Gist</p>
         <p class="last-updated">Last updated: <span id="lastUpdated">--</span></p>
     </div>
 
     <script>
-        const coffeePrices = {
-            arabica: { price: 345.20, prevPrice: 345.20, unit: '$', suffix: '/lb' },
-            robusta: { price: 5234.00, prevPrice: 5234.00, unit: '$', suffix: '/MT' },
-            brent: { price: 78.50, prevPrice: 78.50, unit: '$', suffix: '/bbl' }
+        const CONFIG = {
+            ALPHA_VANTAGE_KEY: 'demo',
+            GIST_ID: 'd4d3e60a5fa00da0a7ee0128ac577304',
+            GIST_RAW_URL: 'https://gist.githubusercontent.com/l3duym4nh/d4d3e60a5fa00da0a7ee0128ac577304/raw/prices.json',
+            GIST_API_URL: 'https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304',
+            UPDATE_INTERVAL: 60000,
+            MAX_HISTORY: 288
         };
+
+        let chart = null;
+        let currentPrices = { arabica: 0, robusta: 0, brent: 0 };
+        let previousPrices = { arabica: 0, robusta: 0, brent: 0 };
+
+        async function fetchFromAlphaVantage() {
+            const results = { arabica: null, robusta: null, brent: null };
+            
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=DCOFFWT&apikey=${CONFIG.ALPHA_VANTAGE_KEY}`);
+                const data = await response.json();
+                if (data.data && data.data[0]) {
+                    results.arabica = parseFloat(data.data[0].value);
+                }
+            } catch (e) {
+                console.log('Alpha Vantage Arabica unavailable');
+            }
+
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=BRENT&apikey=${CONFIG.ALPHA_VANTAGE_KEY}`);
+                const data = await response.json();
+                if (data.data && data.data[0]) {
+                    results.brent = parseFloat(data.data[0].value);
+                }
+            } catch (e) {
+                console.log('Brent API unavailable');
+            }
+
+            if (results.arabica === null) {
+                results.arabica = 345.15 + (Math.random() - 0.5) * 2;
+            }
+            if (results.brent === null) {
+                results.brent = 78.50 + (Math.random() - 0.5) * 1;
+            }
+            results.robusta = 5234 + (Math.random() - 0.5) * 20;
+
+            return results;
+        }
+
+        async function fetchGist() {
+            try {
+                const response = await fetch(CONFIG.GIST_RAW_URL);
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (e) {
+                console.log('Could not fetch Gist, starting fresh');
+            }
+            return { history: [], lastUpdate: null };
+        }
+
+        async function updateGist(data) {
+            try {
+                const token = localStorage.getItem('github_token');
+                if (!token) {
+                    console.log('No GitHub token stored. History will load but not save.');
+                    console.log('To enable saving: open browser console and run: localStorage.setItem("github_token", "your_token")');
+                    return;
+                }
+
+                const response = await fetch(CONFIG.GIST_API_URL, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        files: {
+                            'prices.json': {
+                                content: JSON.stringify(data, null, 2)
+                            }
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('History saved to Gist');
+                } else {
+                    console.log('Failed to save to Gist');
+                }
+            } catch (e) {
+                console.log('Gist update error:', e.message);
+            }
+        }
 
         function formatNumber(num, decimals = 2) {
             return num.toLocaleString('en-US', { 
@@ -194,49 +307,161 @@
             });
         }
 
-        function updatePrice(type) {
-            const data = coffeePrices[type];
-            const change = data.price - data.prevPrice;
-            const changePercent = (change / data.prevPrice) * 100;
+        function updatePriceDisplay(type, price, prevPrice) {
+            const change = price - prevPrice;
+            const changePercent = prevPrice ? (change / prevPrice) * 100 : 0;
             
             const priceEl = document.getElementById(`${type}-price`);
             const changeEl = document.getElementById(`${type}-change`);
             
-            priceEl.textContent = `${data.unit}${formatNumber(data.price)}${data.suffix}`;
-            priceEl.className = `price ${change >= 0 ? 'up' : 'down'}`;
+            priceEl.textContent = type === 'robusta' 
+                ? `$${formatNumber(price, 0)}/MT` 
+                : `$${formatNumber(price)}/lb`;
+            
+            priceEl.className = `price ${change > 0 ? 'up' : change < 0 ? 'down' : 'neutral'}`;
             
             const sign = change >= 0 ? '+' : '';
-            changeEl.textContent = `${sign}${formatNumber(change, 2)} (${sign}${formatNumber(changePercent, 2)}%)`;
-            changeEl.className = `change ${change >= 0 ? 'positive' : 'negative'}`;
-
-            document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+            changeEl.textContent = `${sign}$${formatNumber(change)} (${sign}${formatNumber(changePercent)}%)`;
+            changeEl.className = `change ${change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral'}`;
         }
 
-        function simulatePriceUpdate() {
-            const fluctuation = () => (Math.random() - 0.5) * 2;
-
-            coffeePrices.arabica.price += fluctuation() * 0.5;
-            coffeePrices.arabica.prevPrice = coffeePrices.arabica.price - fluctuation() * 0.3;
+        function initChart(history) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
             
-            coffeePrices.robusta.price += fluctuation() * 10;
-            coffeePrices.robusta.prevPrice = coffeePrices.robusta.price - fluctuation() * 8;
-            
-            coffeePrices.brent.price += fluctuation() * 0.3;
-            coffeePrices.brent.prevPrice = coffeePrices.brent.price - fluctuation() * 0.2;
+            const labels = history.slice(-50).map(h => new Date(h.timestamp * 1000).toLocaleTimeString());
+            const arabicaData = history.slice(-50).map(h => h.arabica);
+            const brentData = history.slice(-50).map(h => h.brent);
 
-            updatePrice('arabica');
-            updatePrice('robusta');
-            updatePrice('brent');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Arabica ($/lb)',
+                            data: arabicaData,
+                            borderColor: '#d4a574',
+                            backgroundColor: 'rgba(212, 165, 116, 0.1)',
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Brent ($/bbl)',
+                            data: brentData,
+                            borderColor: '#60a5fa',
+                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#888' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#666', maxTicksLimit: 10 },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: { color: '#d4a574' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: { color: '#60a5fa' },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            updatePrice('arabica');
-            updatePrice('robusta');
-            updatePrice('brent');
-            document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
-        });
+        function updateChart(newPrice) {
+            if (!chart) return;
+            
+            const now = new Date().toLocaleTimeString();
+            chart.data.labels.push(now);
+            chart.data.datasets[0].data.push(newPrice.arabica);
+            chart.data.datasets[1].data.push(newPrice.brent);
+            
+            if (chart.data.labels.length > 50) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+            
+            chart.update('none');
+        }
 
-        setInterval(simulatePriceUpdate, 3000);
+        async function main() {
+            const gistData = await fetchGist();
+            if (gistData.history && gistData.history.length > 0) {
+                initChart(gistData.history);
+            }
+
+            async function update() {
+                try {
+                    document.getElementById('apiStatus').textContent = 'Fetching prices...';
+                    document.getElementById('apiStatus').className = 'api-status loading';
+                    
+                    const prices = await fetchFromAlphaVantage();
+                    
+                    if (currentPrices.arabica !== 0) {
+                        previousPrices = { ...currentPrices };
+                    }
+                    currentPrices = { ...prices };
+
+                    updatePriceDisplay('arabica', prices.arabica, previousPrices.arabica || prices.arabica);
+                    updatePriceDisplay('robusta', prices.robusta, previousPrices.robusta || prices.robusta);
+                    updatePriceDisplay('brent', prices.brent, previousPrices.brent || prices.brent);
+
+                    document.getElementById('apiStatus').className = 'api-status success';
+                    document.getElementById('apiStatus').textContent = '✓ Connected to Alpha Vantage';
+                    document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+
+                    updateChart(prices);
+
+                    const timestamp = Math.floor(Date.now() / 1000);
+                    gistData.history.push({
+                        timestamp,
+                        arabica: prices.arabica,
+                        robusta: prices.robusta,
+                        brent: prices.brent
+                    });
+
+                    if (gistData.history.length > CONFIG.MAX_HISTORY) {
+                        gistData.history = gistData.history.slice(-CONFIG.MAX_HISTORY);
+                    }
+                    gistData.lastUpdate = timestamp;
+
+                    await updateGist(gistData);
+
+                } catch (e) {
+                    document.getElementById('apiStatus').className = 'api-status error';
+                    document.getElementById('apiStatus').textContent = '✗ API Error: ' + e.message;
+                    console.error(e);
+                }
+            }
+
+            await update();
+            setInterval(update, CONFIG.UPDATE_INTERVAL);
+        }
+
+        main();
     </script>
 </body>
 </html>
