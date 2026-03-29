@@ -1,0 +1,34 @@
+name: Fetch Coffee Prices
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run fetch script
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: python3 fetch_prices.py
+
+      - name: Update Gist
+        if: success() && fileExists('updated_prices.json')
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          curl -s -X PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\":{\"prices.json\":{\"content\":$(cat updated_prices.json)}}}" \
+            "https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304"
+          echo "Gist updated successfully"
