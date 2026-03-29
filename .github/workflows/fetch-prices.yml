@@ -17,12 +17,12 @@ jobs:
           python-version: '3.11'
 
       - name: Run fetch script
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 fetch_prices.py
 
       - name: Update Gist with gh CLI
         if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -f updated_prices.json ]; then
             gh gist edit d4d3e60a5fa00da0a7ee0128ac577304 -f prices.json < updated_prices.json
