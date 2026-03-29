@@ -19,13 +19,18 @@ jobs:
       - name: Run fetch script
         run: python3 fetch_prices.py
 
-      - name: Update Gist with gh CLI
+      - name: Update Gist with curl
         if: success()
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           if [ -f updated_prices.json ]; then
-            gh gist edit d4d3e60a5fa00da0a7ee0128ac577304 -f prices.json < updated_prices.json
+            content=$(cat updated_prices.json)
+            curl -s -X PATCH \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"files\":{\"prices.json\":{\"content\":${content}}}}" \
+              "https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304"
             echo "Gist updated successfully"
           else
             echo "No price data to update"

@@ -44,17 +44,23 @@ def main():
     existing = {"history": []}
     
     if GH_TOKEN:
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        
         gist_req = urllib.request.Request(
             "https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304",
             headers={"Authorization": f"Token {GH_TOKEN}", "User-Agent": "CoffeePriceBot"}
         )
         try:
-            with urllib.request.urlopen(gist_req, timeout=30) as response:
+            with urllib.request.urlopen(gist_req, timeout=30, context=ctx) as response:
                 gist_data = json.loads(response.read())
                 files = gist_data.get("files", {})
                 if "prices.json" in files:
                     content = files["prices.json"].get("content", '{"history":[]}')
                     existing = json.loads(content)
+                    print(f"Loaded existing data with {len(existing.get('history', []))} entries")
         except Exception as e:
             print(f"Could not fetch Gist: {e}")
     else:
