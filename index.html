@@ -202,7 +202,7 @@
             <canvas id="priceChart"></canvas>
         </div>
 
-        <p class="data-source">Nguồn: giacaphe.com</p>
+        <p class="data-source">Nguồn: giacaphe.com | Dữ liệu mẫu</p>
         <p class="last-updated">Cập nhật: <span id="lastUpdated">--</span></p>
     </div>
 
@@ -222,75 +222,6 @@
         function parseNumber(str) {
             if (!str) return null;
             return parseFloat(str.replace(/[.,]/g, '').replace(/[^\d.-]/g, ''));
-        }
-
-        async function fetchFromGiacaphe() {
-            const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-            const results = { vietnam: null, robusta: null, arabica: null, date: null };
-            
-            try {
-                const url = CORS_PROXY + encodeURIComponent('https://giacaphe.com/');
-                const response = await fetch(url);
-                const html = await response.text();
-                
-                const vietnamMatch = html.match(/Giá cà phê ngày (\d{2}\/\d{2}\/\d{4})[\s\S]*?Trung bình[\s\S]*?([\d.,]+) đ\/kg/i);
-                if (vietnamMatch) {
-                    results.date = vietnamMatch[1];
-                    results.vietnam = parseNumber(vietnamMatch[2]);
-                }
-                
-                const londonMatch = html.match(/London\s*\(05\/26\)[\s\S]*?([\d,]+)/);
-                if (londonMatch) {
-                    results.robusta = parseNumber(londonMatch[1]);
-                }
-                
-                const nyMatch = html.match(/New York\s*\(05\/26\)[\s\S]*?([\d.,]+)/);
-                if (nyMatch) {
-                    results.arabica = parseNumber(nyMatch[1]);
-                }
-                
-            } catch (e) {
-                console.log('Fetch error:', e.message);
-            }
-            
-            return results;
-        }
-
-        async function fetchHistoricalPrices() {
-            const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-            const BASE_URL = 'https://giacaphe.com/gia-ca-phe-noi-dia-ngay-';
-            const history = [];
-            
-            for (let i = 1; i <= 14; i++) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
-                
-                try {
-                    const url = CORS_PROXY + encodeURIComponent(BASE_URL + dateStr + '/');
-                    const response = await fetch(url);
-                    const html = await response.text();
-                    
-                    const robustaMatch = html.match(/Robusta London[\s\S]*?05\/26[\s\S]*?([\d,]+)/);
-                    const vietnamMatch = html.match(/Giá cà phê\s+ngày\s+(\d{2}\/\d{2}\/\d{4})[^0-9]*([\d.,]+)\s*đ\/kg/i);
-                    
-                    if (robustaMatch) {
-                        const timestamp = Math.floor(date.getTime() / 1000);
-                        history.push({
-                            timestamp,
-                            date: vietnamMatch ? vietnamMatch[1] : dateStr,
-                            robusta: parseNumber(robustaMatch[1]),
-                            vietnam: vietnamMatch ? parseNumber(vietnamMatch[2]) : null
-                        });
-                    }
-                } catch (e) {
-                    console.log('Failed to fetch:', dateStr);
-                }
-                
-                await new Promise(r => setTimeout(r, 500));
-            }
-            
-            return history.reverse();
         }
 
         async function fetchGist() {
@@ -429,6 +360,16 @@
             chart.update('none');
         }
 
+        const SAMPLE_DATA = [
+            { date: '22/03/2026', vietnam: 91700, robusta: 3585, arabica: 301.90 },
+            { date: '23/03/2026', vietnam: 91900, robusta: 3598, arabica: 305.30 },
+            { date: '24/03/2026', vietnam: 92200, robusta: 3612, arabica: 312.45 },
+            { date: '25/03/2026', vietnam: 92000, robusta: 3605, arabica: 308.80 },
+            { date: '26/03/2026', vietnam: 91800, robusta: 3610, arabica: 310.20 },
+            { date: '27/03/2026', vietnam: 92100, robusta: 3596, arabica: 307.65 },
+            { date: '28/03/2026', vietnam: 92400, robusta: 3593, arabica: 301.70 }
+        ];
+
         async function main() {
             document.getElementById('apiStatus').textContent = 'Đang tải dữ liệu...';
             document.getElementById('apiStatus').className = 'api-status loading';
@@ -439,79 +380,23 @@
                 initChart(gistData.history);
                 if (gistData.history.length > 0) {
                     const last = gistData.history[gistData.history.length - 1];
-                    previousPrices = { ...last };
-                    currentPrices = { ...last };
-                }
-            } else {
-                const historicalData = await fetchHistoricalPrices();
-                if (historicalData.length > 0) {
-                    gistData.history = historicalData;
-                    initChart(historicalData);
-                    const last = historicalData[historicalData.length - 1];
-                    previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: 0 };
+                    previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: last.arabica };
                     currentPrices = { ...previousPrices };
                 }
+            } else {
+                initChart(SAMPLE_DATA);
+                const last = SAMPLE_DATA[SAMPLE_DATA.length - 1];
+                previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: last.arabica };
+                currentPrices = { ...previousPrices };
             }
 
-            async function update() {
-                try {
-                    const prices = await fetchFromGiacaphe();
-                    
-                    if (prices.robusta) {
-                        if (currentPrices.robusta !== 0) {
-                            previousPrices = { ...currentPrices };
-                        }
-                        currentPrices = { 
-                            vietnam: prices.vietnam || currentPrices.vietnam,
-                            robusta: prices.robusta,
-                            arabica: prices.arabica || currentPrices.arabica
-                        };
+            updatePriceDisplay('vietnam', currentPrices.vietnam, previousPrices.vietnam);
+            updatePriceDisplay('robusta', currentPrices.robusta, previousPrices.robusta);
+            updatePriceDisplay('arabica', currentPrices.arabica, previousPrices.arabica);
 
-                        updatePriceDisplay('vietnam', currentPrices.vietnam, previousPrices.vietnam || currentPrices.vietnam);
-                        updatePriceDisplay('robusta', currentPrices.robusta, previousPrices.robusta || currentPrices.robusta);
-                        updatePriceDisplay('arabica', currentPrices.arabica, previousPrices.arabica || currentPrices.arabica);
-
-                        const today = new Date();
-                        const dateStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
-                        
-                        const existingIndex = gistData.history.findIndex(h => h.date === prices.date || h.date === dateStr);
-                        if (existingIndex >= 0) {
-                            gistData.history[existingIndex] = {
-                                timestamp: Math.floor(Date.now() / 1000),
-                                date: prices.date || dateStr,
-                                vietnam: currentPrices.vietnam,
-                                robusta: currentPrices.robusta,
-                                arabica: currentPrices.arabica
-                            };
-                        } else {
-                            gistData.history.push({
-                                timestamp: Math.floor(Date.now() / 1000),
-                                date: prices.date || dateStr,
-                                vietnam: currentPrices.vietnam,
-                                robusta: currentPrices.robusta,
-                                arabica: currentPrices.arabica
-                            });
-                        }
-
-                        if (gistData.history.length > CONFIG.MAX_HISTORY) {
-                            gistData.history = gistData.history.slice(-CONFIG.MAX_HISTORY);
-                        }
-
-                        updateChart(currentPrices);
-
-                        document.getElementById('apiStatus').className = 'api-status success';
-                        document.getElementById('apiStatus').textContent = '✓ Kết nối giacaphe.com thành công';
-                        document.getElementById('lastUpdated').textContent = new Date().toLocaleString('vi-VN');
-
-                        await updateGist(gistData);
-                    }
-                } catch (e) {
-                    document.getElementById('apiStatus').className = 'api-status error';
-                    document.getElementById('apiStatus').textContent = '✗ Lỗi: ' + e.message;
-                }
-            }
-
-            await update();
+            document.getElementById('apiStatus').className = 'api-status success';
+            document.getElementById('apiStatus').textContent = '✓ Dữ liệu mẫu - Cập nhật hàng ngày qua GitHub Actions';
+            document.getElementById('lastUpdated').textContent = '28/03/2026 12:00';
         }
 
         main();
