@@ -18,13 +18,13 @@ jobs:
 
       - name: Run fetch script
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 fetch_prices.py
 
       - name: Update Gist
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -f updated_prices.json ]; then
             content=$(cat updated_prices.json)
