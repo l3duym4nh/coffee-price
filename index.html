@@ -376,27 +376,31 @@
             
             gistData = await fetchGist();
             
-            if (gistData.history && gistData.history.length > 0) {
-                initChart(gistData.history);
-                if (gistData.history.length > 0) {
-                    const last = gistData.history[gistData.history.length - 1];
-                    previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: last.arabica };
-                    currentPrices = { ...previousPrices };
-                }
-            } else {
-                initChart(SAMPLE_DATA);
-                const last = SAMPLE_DATA[SAMPLE_DATA.length - 1];
-                previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: last.arabica };
-                currentPrices = { ...previousPrices };
-            }
+            const useSampleData = !gistData.history || gistData.history.length === 0;
+            const displayData = useSampleData ? SAMPLE_DATA : gistData.history;
+            
+            initChart(useSampleData ? SAMPLE_DATA : gistData.history);
+            const last = displayData[displayData.length - 1];
+            previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: last.arabica };
+            currentPrices = { ...previousPrices };
 
             updatePriceDisplay('vietnam', currentPrices.vietnam, previousPrices.vietnam);
             updatePriceDisplay('robusta', currentPrices.robusta, previousPrices.robusta);
             updatePriceDisplay('arabica', currentPrices.arabica, previousPrices.arabica);
 
             document.getElementById('apiStatus').className = 'api-status success';
-            document.getElementById('apiStatus').textContent = '✓ Dữ liệu mẫu - Cập nhật hàng ngày qua GitHub Actions';
-            document.getElementById('lastUpdated').textContent = '28/03/2026 12:00';
+            document.getElementById('apiStatus').textContent = useSampleData 
+                ? '⚠ Hiển thị dữ liệu mẫu - GitHub Actions sẽ cập nhật sau'
+                : '✓ Dữ liệu thực từ GitHub Actions';
+            
+            const lastUpdate = gistData.lastUpdate 
+                ? new Date(gistData.lastUpdate).toLocaleString('vi-VN')
+                : last.date;
+            document.getElementById('lastUpdated').textContent = lastUpdate;
+            
+            document.querySelector('.data-source').textContent = useSampleData
+                ? 'Nguồn: giacaphe.com | Dữ liệu mẫu (chờ GitHub Actions cập nhật)'
+                : 'Nguồn: giacaphe.com | Cập nhật tự động qua GitHub Actions';
         }
 
         main();

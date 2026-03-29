@@ -2,9 +2,50 @@ import urllib.request
 import json
 import re
 import os
+import ssl
 from datetime import datetime
 
 GH_TOKEN = os.environ.get('GH_TOKEN', '')
+GIST_ID = 'd4d3e60a5fa00da0a7ee0128ac577304'
+
+def create_ssl_context():
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+def update_gist(data):
+    if not GH_TOKEN:
+        print("GH_TOKEN not set, cannot update Gist")
+        return False
+    
+    payload = {
+        "files": {
+            "prices.json": {
+                "content": json.dumps(data, indent=2, ensure_ascii=False)
+            }
+        }
+    }
+    
+    req = urllib.request.Request(
+        f"https://api.github.com/gists/{GIST_ID}",
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            "Authorization": f"Token {GH_TOKEN}",
+            "Content-Type": "application/json",
+            "User-Agent": "CoffeePriceBot"
+        },
+        method="PATCH"
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=30, context=create_ssl_context()) as response:
+            result = json.loads(response.read())
+            print(f"Gist updated: {result.get('html_url', 'OK')}")
+            return True
+    except Exception as e:
+        print(f"Gist update error: {e}")
+        return False
 
 def main():
     req = urllib.request.Request(
@@ -15,19 +56,12 @@ def main():
     with urllib.request.urlopen(req, timeout=30) as response:
         html = response.read().decode('utf-8', errors='ignore')
 
-    # Print HTML snippet for debugging
-    print("=== HTML snippet ===")
-    if 'gnd-gia' in html:
-        print("Found gnd-gia class")
-    
     vietnam_match = re.search(r"Giá cà phê ngày (\d{2}/\d{2}/\d{4})", html)
     trungbinh_match = re.search(r"data-cur=\"([\d.]+)\"", html)
     
-    # Robusta London (RC) - find data-thi-truong='RC'
     robusta_section = re.search(r"data-thi-truong='RC'.*?</tr>", html, re.DOTALL)
     robusta_match = re.search(r"data-price='([\d.]+)'", robusta_section.group()) if robusta_section else None
     
-    # Arabica NY (KC) - find data-thi-truong='KC'
     arabica_section = re.search(r"data-thi-truong='KC'.*?</tr>", html, re.DOTALL)
     arabica_match = re.search(r"data-price='([\d.]+)'", arabica_section.group()) if arabica_section else None
 
@@ -41,20 +75,15 @@ def main():
     print(f"Robusta: {robusta}")
     print(f"Arabica: {arabica}")
 
-    existing = {"history": []}
+    existing: dict = {"history": []}
     
     if GH_TOKEN:
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        
         gist_req = urllib.request.Request(
-            "https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304",
+            f"https://api.github.com/gists/{GIST_ID}",
             headers={"Authorization": f"Token {GH_TOKEN}", "User-Agent": "CoffeePriceBot"}
         )
         try:
-            with urllib.request.urlopen(gist_req, timeout=30, context=ctx) as response:
+            with urllib.request.urlopen(gist_req, timeout=30, context=create_ssl_context()) as response:
                 gist_data = json.loads(response.read())
                 files = gist_data.get("files", {})
                 if "prices.json" in files:
@@ -63,8 +92,6 @@ def main():
                     print(f"Loaded existing data with {len(existing.get('history', []))} entries")
         except Exception as e:
             print(f"Could not fetch Gist: {e}")
-    else:
-        print("GH_TOKEN not set, will create new file")
 
     if vietnam and robusta:
         new_price = {
@@ -91,15 +118,9 @@ def main():
         
         existing["lastUpdate"] = datetime.now().isoformat()
         
-        with open("updated_prices.json", "w") as f:
-            json.dump(existing, f, indent=2, ensure_ascii=False)
-        print("Saved to updated_prices.json")
+        update_gist(existing)
     else:
         print("No valid price data found on page")
-        if vietnam_date:
-            # Save even if no prices, for debugging
-            with open("updated_prices.json", "w") as f:
-                json.dump({"history": [], "lastUpdate": None}, f)
 
 if __name__ == "__main__":
     main()
