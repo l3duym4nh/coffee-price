@@ -113,6 +113,7 @@ def main():
                     print(f"Updated price for {vietnam_date}")
                     break
         
+        existing["history"].sort(key=lambda x: x.get("timestamp", 0))
         if len(existing["history"]) > 30:
             existing["history"] = existing["history"][-30:]
         
