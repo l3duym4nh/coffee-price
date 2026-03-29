@@ -198,7 +198,7 @@
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Biến động giá Robusta London ($/ton)</div>
+            <div class="chart-title">Biến động giá cà phê Việt Nam (đ/kg)</div>
             <canvas id="priceChart"></canvas>
         </div>
 
@@ -301,17 +301,17 @@
             const ctx = document.getElementById('priceChart').getContext('2d');
             
             const labels = history.map(h => h.date || new Date(h.timestamp * 1000).toLocaleDateString('vi-VN'));
-            const robustaData = history.map(h => h.robusta);
+            const vietnamData = history.map(h => h.vietnam);
 
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Robusta London ($/ton)',
-                        data: robustaData,
-                        borderColor: '#4ade80',
-                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                        label: 'Cà phê Việt Nam (đ/kg)',
+                        data: vietnamData,
+                        borderColor: '#d4a574',
+                        backgroundColor: 'rgba(212, 165, 116, 0.1)',
                         tension: 0.3,
                         fill: true,
                         pointRadius: 4,
@@ -335,7 +335,10 @@
                             grid: { color: 'rgba(255,255,255,0.05)' }
                         },
                         y: {
-                            ticks: { color: '#4ade80' },
+                            ticks: { 
+                                color: '#d4a574',
+                                callback: value => value.toLocaleString('vi-VN')
+                            },
                             grid: { color: 'rgba(255,255,255,0.05)' }
                         }
                     }
@@ -350,7 +353,7 @@
             const dateStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}`;
             
             chart.data.labels.push(dateStr);
-            chart.data.datasets[0].data.push(newPrice.robusta);
+            chart.data.datasets[0].data.push(newPrice.vietnam);
             
             if (chart.data.labels.length > CONFIG.MAX_HISTORY) {
                 chart.data.labels.shift();
