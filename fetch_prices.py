@@ -15,33 +15,39 @@ def main():
     with urllib.request.urlopen(req, timeout=30) as response:
         html = response.read().decode('utf-8', errors='ignore')
 
-    vietnam_match = re.search(r'Giá cà phê ngày (\d{2}/\d{2}/\d{4})[\s\S]*?Trung bình[\s\S]*?([\d,]+) đ/kg', html)
-    robusta_match = re.search(r'London\(05/26\)[\s\S]*?([\d,]+)', html)
-    arabica_match = re.search(r'New York\(05/26\)[\s\S]*?([\d.,]+)', html)
+    vietnam_match = re.search(r"Giá cà phê ngày (\d{2}/\d{2}/\d{4})", html)
+    trungbinh_match = re.search(r"Trung bình.*?data-cur=\"([\d.]+)\"", html)
+    robusta_match = re.search(r"data-thi-truong='RC'.*?data-price='([\d.]+)'", html)
+    arabica_match = re.search(r"data-thi-truong='KC'.*?data-price='([\d.]+)'", html)
 
     vietnam_date = vietnam_match.group(1) if vietnam_match else None
-    vietnam = int(vietnam_match.group(2).replace(',', '')) if vietnam_match else None
-    robusta = int(robusta_match.group(1).replace(',', '')) if robusta_match else None
-    arabica = float(arabica_match.group(1).replace(',', '')) if arabica_match else None
+    vietnam = int(float(trungbinh_match.group(1))) if trungbinh_match else None
+    robusta = int(float(robusta_match.group(1))) if robusta_match else None
+    arabica = float(arabica_match.group(1)) if arabica_match else None
 
     print(f"Date: {vietnam_date}")
     print(f"Vietnam: {vietnam}")
     print(f"Robusta: {robusta}")
     print(f"Arabica: {arabica}")
 
-    gist_req = urllib.request.Request(
-        "https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304",
-        headers={"Authorization": f"Token {GH_TOKEN}", "User-Agent": "CoffeePriceBot"}
-    )
-
-    with urllib.request.urlopen(gist_req, timeout=30) as response:
-        gist_data = json.loads(response.read())
-        files = gist_data.get("files", {})
-        if "prices.json" in files:
-            content = files["prices.json"].get("content", '{"history":[]}')
-            existing = json.loads(content)
-        else:
-            existing = {"history": []}
+    existing = {"history": []}
+    
+    if GH_TOKEN:
+        gist_req = urllib.request.Request(
+            "https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304",
+            headers={"Authorization": f"Token {GH_TOKEN}", "User-Agent": "CoffeePriceBot"}
+        )
+        try:
+            with urllib.request.urlopen(gist_req, timeout=30) as response:
+                gist_data = json.loads(response.read())
+                files = gist_data.get("files", {})
+                if "prices.json" in files:
+                    content = files["prices.json"].get("content", '{"history":[]}')
+                    existing = json.loads(content)
+        except Exception as e:
+            print(f"Could not fetch Gist: {e}")
+    else:
+        print("GH_TOKEN not set, will create new file")
 
     if vietnam and robusta:
         new_price = {
@@ -73,6 +79,10 @@ def main():
         print("Saved to updated_prices.json")
     else:
         print("No valid price data found on page")
+        if vietnam_date:
+            # Save even if no prices, for debugging
+            with open("updated_prices.json", "w") as f:
+                json.dump({"history": [], "lastUpdate": None}, f)
 
 if __name__ == "__main__":
     main()
