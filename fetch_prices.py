@@ -15,10 +15,21 @@ def main():
     with urllib.request.urlopen(req, timeout=30) as response:
         html = response.read().decode('utf-8', errors='ignore')
 
+    # Print HTML snippet for debugging
+    print("=== HTML snippet ===")
+    if 'gnd-gia' in html:
+        print("Found gnd-gia class")
+    
     vietnam_match = re.search(r"Giá cà phê ngày (\d{2}/\d{2}/\d{4})", html)
-    trungbinh_match = re.search(r"Trung bình.*?data-cur=\"([\d.]+)\"", html)
-    robusta_match = re.search(r"data-thi-truong='RC'.*?data-price='([\d.]+)'", html)
-    arabica_match = re.search(r"data-thi-truong='KC'.*?data-price='([\d.]+)'", html)
+    trungbinh_match = re.search(r"data-cur=\"([\d.]+)\"", html)
+    
+    # Robusta London (RC) - find data-thi-truong='RC'
+    robusta_section = re.search(r"data-thi-truong='RC'.*?</tr>", html, re.DOTALL)
+    robusta_match = re.search(r"data-price='([\d.]+)'", robusta_section.group()) if robusta_section else None
+    
+    # Arabica NY (KC) - find data-thi-truong='KC'
+    arabica_section = re.search(r"data-thi-truong='KC'.*?</tr>", html, re.DOTALL)
+    arabica_match = re.search(r"data-price='([\d.]+)'", arabica_section.group()) if arabica_section else None
 
     vietnam_date = vietnam_match.group(1) if vietnam_match else None
     vietnam = int(float(trungbinh_match.group(1))) if trungbinh_match else None
