@@ -132,6 +132,33 @@
             margin-bottom: 16px;
         }
 
+        .chart-tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .chart-tab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .chart-tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .chart-tab.active {
+            background: rgba(212, 165, 116, 0.2);
+            border-color: #d4a574;
+            color: #d4a574;
+        }
+
         .api-status {
             text-align: center;
             margin-bottom: 20px;
@@ -172,7 +199,7 @@
         <div class="api-status" id="apiStatus"></div>
 
         <div class="price-grid">
-            <div class="price-card" id="vietnam">
+            <div class="price-card" id="vietnam" onclick="switchChart('vietnam')" style="cursor: pointer;">
                 <div class="coffee-icon">🇻🇳</div>
                 <div class="coffee-name">Cà Phê Việt Nam</div>
                 <div class="coffee-type">Giá nội địa (đ/kg)</div>
@@ -180,7 +207,7 @@
                 <div class="change neutral" id="vietnam-change">Loading...</div>
             </div>
 
-            <div class="price-card" id="robusta">
+            <div class="price-card" id="robusta" onclick="switchChart('robusta')" style="cursor: pointer;">
                 <div class="coffee-icon">🌿</div>
                 <div class="coffee-name">Robusta London</div>
                 <div class="coffee-type">ICE Futures EU ($/ton)</div>
@@ -188,7 +215,7 @@
                 <div class="change neutral" id="robusta-change">Loading...</div>
             </div>
 
-            <div class="price-card" id="arabica">
+            <div class="price-card" id="arabica" onclick="switchChart('arabica')" style="cursor: pointer;">
                 <div class="coffee-icon">🌱</div>
                 <div class="coffee-name">Arabica New York</div>
                 <div class="coffee-type">ICE Futures US (cents/lb)</div>
@@ -198,7 +225,12 @@
         </div>
 
         <div class="chart-container">
-            <div class="chart-title">Biến động giá cà phê Việt Nam (đ/kg)</div>
+            <div class="chart-tabs">
+                <div class="chart-tab active" data-type="vietnam" onclick="switchChart('vietnam')">🇻🇳 Việt Nam</div>
+                <div class="chart-tab" data-type="robusta" onclick="switchChart('robusta')">🌿 Robusta</div>
+                <div class="chart-tab" data-type="arabica" onclick="switchChart('arabica')">🌱 Arabica</div>
+            </div>
+            <div class="chart-title" id="chartTitle">Biến động giá cà phê Việt Nam (đ/kg)</div>
             <canvas id="priceChart"></canvas>
         </div>
 
@@ -218,6 +250,13 @@
         let currentPrices = { vietnam: 0, robusta: 0, arabica: 0 };
         let previousPrices = { vietnam: 0, robusta: 0, arabica: 0 };
         let gistData = { history: [], lastUpdate: null };
+        let currentChartType = 'vietnam';
+        
+        const CHART_CONFIG = {
+            vietnam: { label: 'Cà phê Việt Nam (đ/kg)', color: '#d4a574', format: v => v.toLocaleString('vi-VN') },
+            robusta: { label: 'Robusta London ($/ton)', color: '#4ade80', format: v => `$${v.toLocaleString()}` },
+            arabica: { label: 'Arabica New York (cents/lb)', color: '#60a5fa', format: v => `${v.toFixed(2)}¢` }
+        };
 
         function parseNumber(str) {
             if (!str) return null;
@@ -297,21 +336,22 @@
             changeEl.className = `change ${change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral'}`;
         }
 
-        function initChart(history) {
+        function initChart(history, type = 'vietnam') {
             const ctx = document.getElementById('priceChart').getContext('2d');
+            const config = CHART_CONFIG[type];
             
             const labels = history.map(h => h.date || new Date(h.timestamp * 1000).toLocaleDateString('vi-VN'));
-            const vietnamData = history.map(h => h.vietnam);
+            const data = history.map(h => h[type]);
 
             chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Cà phê Việt Nam (đ/kg)',
-                        data: vietnamData,
-                        borderColor: '#d4a574',
-                        backgroundColor: 'rgba(212, 165, 116, 0.1)',
+                        label: config.label,
+                        data: data,
+                        borderColor: config.color,
+                        backgroundColor: config.color.replace(')', ', 0.1)').replace('rgb', 'rgba'),
                         tension: 0.3,
                         fill: true,
                         pointRadius: 4,
@@ -336,14 +376,41 @@
                         },
                         y: {
                             ticks: { 
-                                color: '#d4a574',
-                                callback: value => value.toLocaleString('vi-VN')
+                                color: config.color,
+                                callback: value => config.format(value)
                             },
                             grid: { color: 'rgba(255,255,255,0.05)' }
                         }
                     }
                 }
             });
+        }
+
+        function switchChart(type) {
+            currentChartType = type;
+            const config = CHART_CONFIG[type];
+            
+            document.querySelectorAll('.chart-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.type === type);
+            });
+            
+            document.getElementById('chartTitle').textContent = `Biến động giá ${config.label}`;
+            
+            if (!chart) return;
+            
+            const history = gistData.history || [];
+            const labels = history.map(h => h.date || new Date(h.timestamp * 1000).toLocaleDateString('vi-VN'));
+            const data = history.map(h => h[type]);
+            
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = data;
+            chart.data.datasets[0].label = config.label;
+            chart.data.datasets[0].borderColor = config.color;
+            chart.data.datasets[0].backgroundColor = config.color.replace(')', ', 0.1)').replace('rgb', 'rgba');
+            chart.options.scales.y.ticks.color = config.color;
+            chart.options.scales.y.ticks.callback = value => config.format(value);
+            
+            chart.update();
         }
 
         function updateChart(newPrice) {
@@ -382,7 +449,7 @@
             const useSampleData = !gistData.history || gistData.history.length === 0;
             const displayData = useSampleData ? SAMPLE_DATA : gistData.history;
             
-            initChart(useSampleData ? SAMPLE_DATA : gistData.history);
+            initChart(displayData, 'vietnam');
             const last = displayData[displayData.length - 1];
             previousPrices = { vietnam: last.vietnam, robusta: last.robusta, arabica: last.arabica };
             currentPrices = { ...previousPrices };
