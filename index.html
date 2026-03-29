@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Price Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #3c2a21 0%, #1a1a1a 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #d4a574;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+        }
+
+        .price-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .price-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .price-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(212, 165, 116, 0.15);
+        }
+
+        .coffee-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .coffee-name {
+            font-size: 1.2rem;
+            color: #d4a574;
+            margin-bottom: 8px;
+        }
+
+        .coffee-type {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 16px;
+        }
+
+        .price {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4ade80;
+        }
+
+        .price.up {
+            color: #4ade80;
+        }
+
+        .price.down {
+            color: #f87171;
+        }
+
+        .change {
+            font-size: 0.9rem;
+            margin-top: 8px;
+        }
+
+        .change.positive {
+            color: #4ade80;
+        }
+
+        .change.negative {
+            color: #f87171;
+        }
+
+        .update-info {
+            text-align: center;
+            color: #666;
+            margin-top: 20px;
+        }
+
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(74, 222, 128, 0.15);
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+        }
+
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .last-updated {
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 30px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>☕ Coffee Price Tracker</h1>
+        <p class="subtitle">Real-time coffee futures & spot prices</p>
+        
+        <div style="text-align: center;">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span>Live Prices</span>
+            </div>
+        </div>
+
+        <div class="price-grid" id="priceGrid">
+            <div class="price-card" id="arabica">
+                <div class="coffee-icon">🌱</div>
+                <div class="coffee-name">Arabica Coffee</div>
+                <div class="coffee-type">ICE Futures US (KC)</div>
+                <div class="price" id="arabica-price">$3.45</div>
+                <div class="change" id="arabica-change">+0.00 (0.00%)</div>
+            </div>
+
+            <div class="price-card" id="robusta">
+                <div class="coffee-icon">🌿</div>
+                <div class="coffee-name">Robusta Coffee</div>
+                <div class="coffee-type">ICE Futures EU (RC)</div>
+                <div class="price" id="robusta-price">$5,234</div>
+                <div class="change" id="robusta-change">+0.00 (0.00%)</div>
+            </div>
+
+            <div class="price-card" id="brent">
+                <div class="coffee-icon">🛢️</div>
+                <div class="coffee-name">Brent Crude</div>
+                <div class="coffee-type">ICE Futures EU</div>
+                <div class="price" id="brent-price">$78.50</div>
+                <div class="change" id="brent-change">+0.00 (0.00%)</div>
+            </div>
+        </div>
+
+        <p class="last-updated">Last updated: <span id="lastUpdated">--</span></p>
+    </div>
+
+    <script>
+        const coffeePrices = {
+            arabica: { price: 345.20, prevPrice: 345.20, unit: '$', suffix: '/lb' },
+            robusta: { price: 5234.00, prevPrice: 5234.00, unit: '$', suffix: '/MT' },
+            brent: { price: 78.50, prevPrice: 78.50, unit: '$', suffix: '/bbl' }
+        };
+
+        function formatNumber(num, decimals = 2) {
+            return num.toLocaleString('en-US', { 
+                minimumFractionDigits: decimals, 
+                maximumFractionDigits: decimals 
+            });
+        }
+
+        function updatePrice(type) {
+            const data = coffeePrices[type];
+            const change = data.price - data.prevPrice;
+            const changePercent = (change / data.prevPrice) * 100;
+            
+            const priceEl = document.getElementById(`${type}-price`);
+            const changeEl = document.getElementById(`${type}-change`);
+            
+            priceEl.textContent = `${data.unit}${formatNumber(data.price)}${data.suffix}`;
+            priceEl.className = `price ${change >= 0 ? 'up' : 'down'}`;
+            
+            const sign = change >= 0 ? '+' : '';
+            changeEl.textContent = `${sign}${formatNumber(change, 2)} (${sign}${formatNumber(changePercent, 2)}%)`;
+            changeEl.className = `change ${change >= 0 ? 'positive' : 'negative'}`;
+
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+        }
+
+        function simulatePriceUpdate() {
+            const fluctuation = () => (Math.random() - 0.5) * 2;
+
+            coffeePrices.arabica.price += fluctuation() * 0.5;
+            coffeePrices.arabica.prevPrice = coffeePrices.arabica.price - fluctuation() * 0.3;
+            
+            coffeePrices.robusta.price += fluctuation() * 10;
+            coffeePrices.robusta.prevPrice = coffeePrices.robusta.price - fluctuation() * 8;
+            
+            coffeePrices.brent.price += fluctuation() * 0.3;
+            coffeePrices.brent.prevPrice = coffeePrices.brent.price - fluctuation() * 0.2;
+
+            updatePrice('arabica');
+            updatePrice('robusta');
+            updatePrice('brent');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePrice('arabica');
+            updatePrice('robusta');
+            updatePrice('brent');
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+        });
+
+        setInterval(simulatePriceUpdate, 3000);
+    </script>
+</body>
+</html>
