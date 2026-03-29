@@ -209,7 +209,7 @@
     <script>
         const CONFIG = {
             GIST_ID: 'd4d3e60a5fa00da0a7ee0128ac577304',
-            GIST_RAW_URL: 'https://gist.githubusercontent.com/l3duym4nh/d4d3e60a5fa00da0a7ee0128ac577304/raw/prices.json',
+            GIST_RAW_URL: 'https://gist.githubusercontent.com/l3duym4nh/d4d3e60a5fa00da0a7ee0128ac577304/raw/0ac762015a49b6763a2627c339dbe524541f3e1c/prices.json',
             GIST_API_URL: 'https://api.github.com/gists/d4d3e60a5fa00da0a7ee0128ac577304',
             MAX_HISTORY: 30
         };
@@ -226,34 +226,27 @@
 
         async function fetchFromGiacaphe() {
             const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-            const BASE_URL = 'https://giacaphe.com/gia-ca-phe-noi-dia-ngay-';
-            
             const results = { vietnam: null, robusta: null, arabica: null, date: null };
             
             try {
-                const today = new Date();
-                const dateStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
-                const url = CORS_PROXY + encodeURIComponent(BASE_URL + dateStr + '/');
-                
+                const url = CORS_PROXY + encodeURIComponent('https://giacaphe.com/');
                 const response = await fetch(url);
                 const html = await response.text();
                 
-                const dom = new DOMParser().parseFromString(html, 'text/html');
-                
-                const vietnamMatch = html.match(/Giá cà phê\s+ngày\s+(\d{2}\/\d{2}\/\d{4})[^0-9]*([\d.,]+)\s*đ\/kg/i);
+                const vietnamMatch = html.match(/Giá cà phê ngày (\d{2}\/\d{2}\/\d{4})[\s\S]*?Trung bình[\s\S]*?([\d.,]+) đ\/kg/i);
                 if (vietnamMatch) {
-                    results.vietnam = parseNumber(vietnamMatch[2]);
                     results.date = vietnamMatch[1];
+                    results.vietnam = parseNumber(vietnamMatch[2]);
                 }
                 
-                const robustaMatch = html.match(/Robusta London[\s\S]*?05\/26[\s\S]*?([\d,]+)/);
-                if (robustaMatch) {
-                    results.robusta = parseNumber(robustaMatch[1]);
+                const londonMatch = html.match(/London\s*\(05\/26\)[\s\S]*?([\d,]+)/);
+                if (londonMatch) {
+                    results.robusta = parseNumber(londonMatch[1]);
                 }
                 
-                const arabicaMatch = html.match(/Arabica New York[\s\S]*?05\/26[\s\S]*?([\d,.]+)/);
-                if (arabicaMatch) {
-                    results.arabica = parseNumber(arabicaMatch[1]);
+                const nyMatch = html.match(/New York\s*\(05\/26\)[\s\S]*?([\d.,]+)/);
+                if (nyMatch) {
+                    results.arabica = parseNumber(nyMatch[1]);
                 }
                 
             } catch (e) {
